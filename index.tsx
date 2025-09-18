@@ -166,6 +166,32 @@ const DataTable = ({ data }) => (
      </div>
 );
 
+const ChannelPerformanceTable = ({ data }) => (
+     <div className="card table-container">
+        <h3 className="card-title">Channel Performance Summary</h3>
+        <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+                <thead>
+                    <tr>
+                        <th>Channel</th>
+                        <th>Total Transaction Volume</th>
+                        <th>Total Conversions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {data.map((row) => (
+                        <tr key={row.channel}>
+                            <td>{row.channel}</td>
+                            <td>${row.volume.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td>{row.conversions.toLocaleString()}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+     </div>
+);
+
 // --- MAIN APP ---
 
 const App = () => {
@@ -238,6 +264,20 @@ const App = () => {
         };
     }, [filteredData, filteredTransactions]);
     
+    const channelPerformanceData = useMemo(() => {
+        const allChannels = new Set([
+            ...Object.keys(analytics.channel),
+            ...Object.keys(analytics.conversions),
+            ...Object.keys(analytics.transactionVolume),
+        ]);
+
+        return Array.from(allChannels).sort().map(channel => ({
+            channel,
+            volume: analytics.transactionVolume[channel] || 0,
+            conversions: analytics.conversions[channel] || 0,
+        }));
+    }, [analytics]);
+
     const uniqueCountries = useMemo(() => ['all', ...Array.from(new Set(initialClickData.map(d => d.send_country)))], []);
     const uniqueCustomerTypes = useMemo(() => ['all', ...Array.from(new Set(initialClickData.map(d => d.customer_type)))], []);
 
@@ -282,6 +322,7 @@ const App = () => {
                 <BarChart data={analytics.conversions} title="Conversions by Channel" />
                 <BarChart data={analytics.transactionVolume} title="Transaction Volume by Channel" />
                 
+                <ChannelPerformanceTable data={channelPerformanceData} />
                 <DataTable data={filteredData} />
             </main>
         </>
