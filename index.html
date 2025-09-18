@@ -50,6 +50,7 @@
         /* Filters */
         .filters {
             display: flex;
+            flex-wrap: wrap;
             gap: 1rem;
             padding: 1rem;
             background-color: var(--card-background-color);
@@ -68,13 +69,14 @@
             color: var(--text-color-secondary);
         }
 
-        .filter-group select {
+        .filter-group select, .filter-group input[type="date"] {
             background-color: #333;
             color: var(--text-color);
             border: 1px solid var(--border-color);
             border-radius: 4px;
             padding: 0.5rem;
             font-family: var(--font-family);
+            color-scheme: dark;
         }
 
         /* Dashboard Grid */

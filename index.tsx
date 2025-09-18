@@ -83,6 +83,15 @@ const generateMockData = () => {
 
 const { clickData: initialClickData, totalReached, transactions: initialTransactions } = generateMockData();
 
+// --- HELPERS ---
+const formatDateForInput = (date) => {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 // --- COMPONENTS ---
 
 const KPICard = ({ value, label }: { value: string | number; label: string }) => (
@@ -165,6 +174,8 @@ const App = () => {
     const [filters, setFilters] = useState({
         sendCountry: 'all',
         customerType: 'all',
+        startDate: formatDateForInput(MOCK_CONFIG.startDate),
+        endDate: formatDateForInput(MOCK_CONFIG.endDate),
     });
 
     const handleFilterChange = (e) => {
@@ -173,17 +184,31 @@ const App = () => {
     };
     
     const filteredData = useMemo(() => {
-        return clickData.filter(d => 
-            (filters.sendCountry === 'all' || d.send_country === filters.sendCountry) &&
-            (filters.customerType === 'all' || d.customer_type === filters.customerType)
-        );
+        const startDate = filters.startDate ? new Date(`${filters.startDate}T00:00:00`) : null;
+        const endDate = filters.endDate ? new Date(`${filters.endDate}T23:59:59`) : null;
+
+        return clickData.filter(d => {
+            const itemDate = d.timestamp;
+            const dateFilterPassed = (!startDate || itemDate >= startDate) && (!endDate || itemDate <= endDate);
+            const countryFilterPassed = filters.sendCountry === 'all' || d.send_country === filters.sendCountry;
+            const customerTypeFilterPassed = filters.customerType === 'all' || d.customer_type === filters.customerType;
+            return dateFilterPassed && countryFilterPassed && customerTypeFilterPassed;
+        });
     }, [clickData, filters]);
 
     const filteredTransactions = useMemo(() => {
-        if (!filteredData.length || !transactions.length) return [];
+        if (!transactions.length) return [];
+        
+        const startDate = filters.startDate ? new Date(`${filters.startDate}T00:00:00`) : null;
+        const endDate = filters.endDate ? new Date(`${filters.endDate}T23:59:59`) : null;
+
         const filteredUserIds = new Set(filteredData.map(d => d.user_id));
-        return transactions.filter(t => filteredUserIds.has(t.user_id));
-    }, [filteredData, transactions]);
+        return transactions.filter(t => {
+            const itemDate = t.timestamp;
+            const dateFilterPassed = (!startDate || itemDate >= startDate) && (!endDate || itemDate <= endDate);
+            return filteredUserIds.has(t.user_id) && dateFilterPassed;
+        });
+    }, [filteredData, transactions, filters.startDate, filters.endDate]);
 
     const analytics = useMemo(() => {
         const data = filteredData;
@@ -226,6 +251,14 @@ const App = () => {
             </header>
 
             <section className="filters" aria-label="Dashboard Filters">
+                <div className="filter-group">
+                    <label htmlFor="startDate">Start Date</label>
+                    <input type="date" id="startDate" name="startDate" value={filters.startDate} onChange={handleFilterChange} />
+                </div>
+                <div className="filter-group">
+                    <label htmlFor="endDate">End Date</label>
+                    <input type="date" id="endDate" name="endDate" value={filters.endDate} onChange={handleFilterChange} />
+                </div>
                 <div className="filter-group">
                     <label htmlFor="sendCountry">Sending Country</label>
                     <select id="sendCountry" name="sendCountry" value={filters.sendCountry} onChange={handleFilterChange}>
