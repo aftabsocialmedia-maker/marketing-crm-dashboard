@@ -102,7 +102,13 @@ const KPICard = ({ value, label }: { value: string | number; label: string }) =>
 );
 
 
-const BarChart = ({ data, title }: { data: { [key: string]: number }; title: string }) => {
+const BarChart = ({ data, title, onBarClick, dataKey, activeFilter }: { 
+    data: { [key: string]: number }; 
+    title: string;
+    onBarClick: (category: string, value: string) => void;
+    dataKey: string;
+    activeFilter: { category: string; value: string } | null;
+}) => {
     const maxValue = Math.max(0, ...Object.values(data));
     const entries = Object.entries(data);
 
@@ -113,16 +119,20 @@ const BarChart = ({ data, title }: { data: { [key: string]: number }; title: str
                 <div style={{ display: 'flex', flexGrow: 1 }}>
                     <div className="chart-container">
                         <div className="bar-chart">
-                            {entries.map(([key, value], index) => (
-                                <div
-                                    key={key}
-                                    className="bar"
-                                    style={{ height: maxValue > 0 ? `${(value / maxValue) * 100}%` : '0%', backgroundColor: `var(--${['primary', 'secondary', 'tertiary', 'quad'][index % 4]}-color)` }}
-                                    title={`${key}: ${value.toLocaleString()}`}
-                                >
-                                  <div className="tooltip">{key}: {value.toLocaleString()}</div>
-                                </div>
-                            ))}
+                            {entries.map(([key, value], index) => {
+                                const isSelected = activeFilter && activeFilter.category === dataKey && activeFilter.value === key;
+                                return (
+                                    <div
+                                        key={key}
+                                        className={`bar ${isSelected ? 'selected' : ''}`}
+                                        style={{ height: maxValue > 0 ? `${(value / maxValue) * 100}%` : '0%', backgroundColor: `var(--${['primary', 'secondary', 'tertiary', 'quad'][index % 4]}-color)` }}
+                                        title={`${key}: ${value.toLocaleString()}`}
+                                        onClick={() => onBarClick(dataKey, key)}
+                                    >
+                                      <div className="tooltip">{key}: {value.toLocaleString()}</div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -134,155 +144,161 @@ const BarChart = ({ data, title }: { data: { [key: string]: number }; title: str
     );
 };
 
-const DataTable = ({ data }) => (
+const DataTable = ({ data, activeFilter, onClearFilter }) => (
      <div className="card table-container">
-        <h3 className="card-title">Attributed Click Details</h3>
+        <div className="table-header">
+            <h3 className="card-title">Attributed Click Details</h3>
+            {activeFilter && (
+                <div className="active-filter-display">
+                    <span>Filtering by <strong>{activeFilter.category.replace('_', ' ')}:</strong> {activeFilter.value}</span>
+                    <button onClick={onClearFilter} className="clear-filter-btn">Clear</button>
+                </div>
+            )}
+        </div>
         <div style={{ overflowX: 'auto' }}>
             <table className="data-table">
                 <thead>
                     <tr>
                         <th>User ID</th>
                         <th>Channel</th>
-                        <th>Date</th>
-                        <th>Send Country</th>
-                        <th>Device</th>
+                        <th>Gender</th>
+                        <th>Age</th>
                         <th>Customer Type</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {data.slice(0, 10).map((row) => ( // Show first 10 rows
-                        <tr key={row.user_id}>
-                            <td>{row.user_id}</td>
-                            <td>{row.channel}</td>
-                            <td>{row.timestamp.toLocaleDateString()}</td>
-                            <td>{row.send_country}</td>
-                            <td>{row.device_info}</td>
-                            <td>{row.customer_type}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-     </div>
-);
-
-const ChannelPerformanceTable = ({ data }) => (
-     <div className="card table-container">
-        <h3 className="card-title">Channel Performance Summary</h3>
-        <div style={{ overflowX: 'auto' }}>
-            <table className="data-table">
-                <thead>
-                    <tr>
-                        <th>Channel</th>
-                        <th>Total Transaction Volume</th>
-                        <th>Total Conversions</th>
+                        <th>Device</th>
+                        <th>Platform</th>
+                        <th>Send Country</th>
+                        <th>Click Timestamp</th>
                     </tr>
                 </thead>
                 <tbody>
                     {data.map((row) => (
-                        <tr key={row.channel}>
+                        <tr key={row.user_id}>
+                            <td>{row.user_id}</td>
                             <td>{row.channel}</td>
-                            <td>${row.volume.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                            <td>{row.conversions.toLocaleString()}</td>
+                            <td>{row.gender}</td>
+                            <td>{row.age}</td>
+                            <td>{row.customer_type}</td>
+                            <td>{row.device_info}</td>
+                            <td>{row.platform_type}</td>
+                            <td>{row.send_country}</td>
+                            <td>{new Date(row.timestamp).toLocaleString()}</td>
                         </tr>
                     ))}
                 </tbody>
             </table>
         </div>
-     </div>
+    </div>
 );
 
-// --- MAIN APP ---
-
 const App = () => {
-    const [clickData] = useState(initialClickData);
-    const [transactions] = useState(initialTransactions);
     const [filters, setFilters] = useState({
-        sendCountry: 'all',
-        customerType: 'all',
         startDate: formatDateForInput(MOCK_CONFIG.startDate),
         endDate: formatDateForInput(MOCK_CONFIG.endDate),
+        country: 'all',
+        device: 'all',
+        platform: 'all',
     });
+    const [chartFilter, setChartFilter] = useState<{ category: string; value: string } | null>(null);
 
-    const handleFilterChange = (e) => {
+    const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFilters(prev => ({ ...prev, [name]: value }));
+        setChartFilter(null); // Reset chart filter when main filters change
     };
-    
-    const filteredData = useMemo(() => {
-        const startDate = filters.startDate ? new Date(`${filters.startDate}T00:00:00`) : null;
-        const endDate = filters.endDate ? new Date(`${filters.endDate}T23:59:59`) : null;
 
-        return clickData.filter(d => {
-            const itemDate = d.timestamp;
-            const dateFilterPassed = (!startDate || itemDate >= startDate) && (!endDate || itemDate <= endDate);
-            const countryFilterPassed = filters.sendCountry === 'all' || d.send_country === filters.sendCountry;
-            const customerTypeFilterPassed = filters.customerType === 'all' || d.customer_type === filters.customerType;
-            return dateFilterPassed && countryFilterPassed && customerTypeFilterPassed;
+    const handleBarClick = (category: string, value: string) => {
+        if (chartFilter && chartFilter.category === category && chartFilter.value === value) {
+            setChartFilter(null);
+        } else {
+            setChartFilter({ category, value });
+        }
+    };
+
+    const handleClearChartFilter = () => {
+        setChartFilter(null);
+    };
+
+    const { filteredClickData, filteredTransactions } = useMemo(() => {
+        const start = new Date(filters.startDate);
+        const end = new Date(filters.endDate);
+        end.setHours(23, 59, 59, 999);
+
+        const filteredClicks = initialClickData.filter(d => {
+            const date = new Date(d.timestamp);
+            const countryMatch = filters.country === 'all' || d.send_country === filters.country;
+            const deviceMatch = filters.device === 'all' || d.device_info === filters.device;
+            const platformMatch = filters.platform === 'all' || d.platform_type === filters.platform;
+            return date >= start && date <= end && countryMatch && deviceMatch && platformMatch;
         });
-    }, [clickData, filters]);
-
-    const filteredTransactions = useMemo(() => {
-        if (!transactions.length) return [];
         
-        const startDate = filters.startDate ? new Date(`${filters.startDate}T00:00:00`) : null;
-        const endDate = filters.endDate ? new Date(`${filters.endDate}T23:59:59`) : null;
+        const clickUserIds = new Set(filteredClicks.map(c => c.user_id));
+        const filteredTrans = initialTransactions.filter(t => clickUserIds.has(t.user_id));
 
-        const filteredUserIds = new Set(filteredData.map(d => d.user_id));
-        return transactions.filter(t => {
-            const itemDate = t.timestamp;
-            const dateFilterPassed = (!startDate || itemDate >= startDate) && (!endDate || itemDate <= endDate);
-            return filteredUserIds.has(t.user_id) && dateFilterPassed;
-        });
-    }, [filteredData, transactions, filters.startDate, filters.endDate]);
+        return { filteredClickData: filteredClicks, filteredTransactions: filteredTrans };
+    }, [filters]);
 
     const analytics = useMemo(() => {
-        const data = filteredData;
-        const countBy = (key) => data.reduce((acc, curr) => {
+        const totalClicks = filteredClickData.length;
+        const totalConversions = filteredTransactions.length;
+        const totalVolume = filteredTransactions.reduce((acc, curr) => acc + curr.trx_volume, 0);
+        const conversionRate = totalClicks > 0 ? (totalConversions / totalClicks) * 100 : 0;
+
+        const reduceToCount = (data, key) => data.reduce((acc, curr) => {
             acc[curr[key]] = (acc[curr[key]] || 0) + 1;
             return acc;
         }, {});
-        
-        const transactionVolume = filteredTransactions.reduce((acc, curr) => {
-            acc[curr.channel] = (acc[curr.channel] || 0) + curr.trx_volume;
-            return acc;
-        }, {});
 
-        const conversions = filteredTransactions.reduce((acc, curr) => {
-            acc[curr.channel] = (acc[curr.channel] || 0) + 1;
+        const channelPerformance = reduceToCount(filteredClickData, 'channel');
+        const genderDistribution = reduceToCount(filteredClickData, 'gender');
+        const customerTypeDistribution = reduceToCount(filteredClickData, 'customer_type');
+        
+        const ageGroups = { '18-25': 0, '26-35': 0, '36-45': 0, '46-55': 0, '56+': 0 };
+        filteredClickData.forEach(user => {
+            if (user.age <= 25) ageGroups['18-25']++;
+            else if (user.age <= 35) ageGroups['26-35']++;
+            else if (user.age <= 45) ageGroups['36-45']++;
+            else if (user.age <= 55) ageGroups['46-55']++;
+            else ageGroups['56+']++;
+        });
+        
+        const customerTypeFormatted = Object.entries(customerTypeDistribution).reduce((acc, [key, value]) => {
+            acc[key.charAt(0).toUpperCase() + key.slice(1)] = value;
             return acc;
         }, {});
 
         return {
-            channel: countBy('channel'),
-            device: countBy('device_info'),
-            customerType: countBy('customer_type'),
-            sendCountry: countBy('send_country'),
-            gender: countBy('gender'),
-            transactionVolume,
-            conversions,
+            totalReached,
+            totalClicks,
+            totalConversions,
+            conversionRate,
+            totalVolume,
+            channelPerformance,
+            genderDistribution,
+            customerTypeDistribution: customerTypeFormatted,
+            ageGroups,
         };
-    }, [filteredData, filteredTransactions]);
+    }, [filteredClickData, filteredTransactions]);
     
-    const channelPerformanceData = useMemo(() => {
-        const allChannels = new Set([
-            ...Object.keys(analytics.channel),
-            ...Object.keys(analytics.conversions),
-            ...Object.keys(analytics.transactionVolume),
-        ]);
+    const filteredTableData = useMemo(() => {
+        if (!chartFilter) return filteredClickData;
+        
+        const { category, value } = chartFilter;
 
-        return Array.from(allChannels).sort().map(channel => ({
-            channel,
-            volume: analytics.transactionVolume[channel] || 0,
-            conversions: analytics.conversions[channel] || 0,
-        }));
-    }, [analytics]);
+        if (category === 'customer_type') {
+            return filteredClickData.filter(d => d.customer_type.toLowerCase() === value.toLowerCase());
+        }
+        if (category === 'age') {
+             const [min, maxStr] = value.split(/[-+]/);
+             const max = maxStr ? parseInt(maxStr, 10) : Infinity;
+             return filteredClickData.filter(d => d.age >= parseInt(min, 10) && d.age <= max);
+        }
+
+        return filteredClickData.filter(d => d[category] === value);
+    }, [filteredClickData, chartFilter]);
 
     const uniqueCountries = useMemo(() => ['all', ...Array.from(new Set(initialClickData.map(d => d.send_country)))], []);
-    const uniqueCustomerTypes = useMemo(() => ['all', ...Array.from(new Set(initialClickData.map(d => d.customer_type)))], []);
-
-    const totalClicks = filteredData.length;
-    const clickThroughRate = totalReached > 0 ? (totalClicks / totalReached) * 100 : 0;
+    const uniqueDevices = useMemo(() => ['all', ...Array.from(new Set(initialClickData.map(d => d.device_info)))], []);
+    const uniquePlatforms = useMemo(() => ['all', ...Array.from(new Set(initialClickData.map(d => d.platform_type)))], []);
 
     return (
         <>
@@ -290,7 +306,7 @@ const App = () => {
                 <h1>Marketing Attribution Dashboard</h1>
             </header>
 
-            <section className="filters" aria-label="Dashboard Filters">
+            <div className="filters">
                 <div className="filter-group">
                     <label htmlFor="startDate">Start Date</label>
                     <input type="date" id="startDate" name="startDate" value={filters.startDate} onChange={handleFilterChange} />
@@ -300,35 +316,46 @@ const App = () => {
                     <input type="date" id="endDate" name="endDate" value={filters.endDate} onChange={handleFilterChange} />
                 </div>
                 <div className="filter-group">
-                    <label htmlFor="sendCountry">Sending Country</label>
-                    <select id="sendCountry" name="sendCountry" value={filters.sendCountry} onChange={handleFilterChange}>
-                        {uniqueCountries.map(c => <option key={c} value={c}>{c === 'all' ? 'All Countries' : c}</option>)}
+                    <label htmlFor="country">Country</label>
+                    <select id="country" name="country" value={filters.country} onChange={handleFilterChange}>
+                        {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                 </div>
-                 <div className="filter-group">
-                    <label htmlFor="customerType">Customer Type</label>
-                    <select id="customerType" name="customerType" value={filters.customerType} onChange={handleFilterChange}>
-                         {uniqueCustomerTypes.map(c => <option key={c} value={c}>{c === 'all' ? 'All Types' : c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                <div className="filter-group">
+                    <label htmlFor="device">Device</label>
+                    <select id="device" name="device" value={filters.device} onChange={handleFilterChange}>
+                        {uniqueDevices.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                 </div>
-            </section>
+                <div className="filter-group">
+                    <label htmlFor="platform">Platform</label>
+                    <select id="platform" name="platform" value={filters.platform} onChange={handleFilterChange}>
+                        {uniquePlatforms.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                </div>
+            </div>
             
-            <main className="dashboard-grid">
-                <KPICard value={totalReached.toLocaleString()} label="Total Users Reached" />
-                <KPICard value={totalClicks.toLocaleString()} label="Total Attributed Clicks" />
-                <KPICard value={clickThroughRate.toFixed(2)+'%'} label="Overall Click-Through Rate" />
+            <div className="dashboard-grid">
+                <KPICard value={analytics.totalReached.toLocaleString()} label="Total Users Reached" />
+                <KPICard value={analytics.totalClicks.toLocaleString()} label="Attributed Clicks" />
+                <KPICard value={analytics.totalConversions.toLocaleString()} label="Total Conversions" />
+                <KPICard value={`$${analytics.totalVolume.toLocaleString()}`} label="Total Transaction Volume" />
+                <KPICard value={`${analytics.conversionRate.toFixed(2)}%`} label="Click-to-Conversion Rate" />
+                <BarChart title="Channel Performance" data={analytics.channelPerformance} onBarClick={handleBarClick} dataKey="channel" activeFilter={chartFilter} />
                 
-                <BarChart data={analytics.channel} title="Clicks by Channel" />
-                <BarChart data={analytics.conversions} title="Conversions by Channel" />
-                <BarChart data={analytics.transactionVolume} title="Transaction Volume by Channel" />
+                <div className="section-title-container">
+                    <h2 className="section-title">User Segmentation</h2>
+                </div>
+                <BarChart title="Gender Distribution" data={analytics.genderDistribution} onBarClick={handleBarClick} dataKey="gender" activeFilter={chartFilter} />
+                <BarChart title="Age Groups" data={analytics.ageGroups} onBarClick={handleBarClick} dataKey="age" activeFilter={chartFilter} />
+                <BarChart title="Customer Type" data={analytics.customerTypeDistribution} onBarClick={handleBarClick} dataKey="customer_type" activeFilter={chartFilter} />
                 
-                <ChannelPerformanceTable data={channelPerformanceData} />
-                <DataTable data={filteredData} />
-            </main>
+                <DataTable data={filteredTableData} activeFilter={chartFilter} onClearFilter={handleClearChartFilter} />
+            </div>
         </>
     );
 };
 
 const container = document.getElementById('root');
-const root = createRoot(container);
+const root = createRoot(container!);
 root.render(<App />);
